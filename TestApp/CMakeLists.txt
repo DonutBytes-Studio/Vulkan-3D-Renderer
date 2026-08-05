@@ -26,11 +26,12 @@ else()
 endif()
 
 target_link_libraries(TestApp PRIVATE
-	Vulkan::Vulkan
 	Vulkan::volk
 	Vulkan::shaderc_combined
-	SDL3::SDL3
+	SDL3::SDL3-static
 	glm::glm
 )
+
+target_compile_definitions(TestApp PUBLIC VK_NO_PROTOTYPES)
 
 target_include_directories(TestApp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include/)
