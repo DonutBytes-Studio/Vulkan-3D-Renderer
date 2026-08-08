@@ -27,7 +27,7 @@ endif()
 
 target_link_libraries(TestApp PRIVATE
     Vulkan::volk
-    shaderc_combined
+    ${SHADERC_TARGET}
     VulkanMemoryAllocator
     SDL3::SDL3-static
     glm::glm
