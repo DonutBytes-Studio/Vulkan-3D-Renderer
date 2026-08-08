@@ -14,22 +14,23 @@ set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
-	target_compile_options(TestApp PRIVATE /std:c++latest)
+    target_compile_options(TestApp PRIVATE /std:c++latest)
 endif()
 
 if(PRODUCTION_BUILD)
-	target_compile_definitions(${PROJECT_NAME} PUBLIC RESOURCES_PATH="./resources/") #Relative path
-	target_compile_definitions(${PROJECT_NAME} PUBLIC PRODUCTION_BUILD=1)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC RESOURCES_PATH="./resources/") #Relative path
+    target_compile_definitions(${PROJECT_NAME} PUBLIC PRODUCTION_BUILD=1)
 else()
-	target_compile_definitions(${PROJECT_NAME} PUBLIC RESOURCES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/") #Absolute path... ONLY DURING DEVELOPEMENT!
-	target_compile_definitions(${PROJECT_NAME} PUBLIC PRODUCTION_BUILD=0)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC RESOURCES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/") #Absolute path... ONLY DURING DEVELOPEMENT!
+    target_compile_definitions(${PROJECT_NAME} PUBLIC PRODUCTION_BUILD=0)
 endif()
 
 target_link_libraries(TestApp PRIVATE
-	Vulkan::volk
-	Vulkan::shaderc_combined
-	SDL3::SDL3-static
-	glm::glm
+    Vulkan::volk
+    shaderc_combined
+    VulkanMemoryAllocator
+    SDL3::SDL3-static
+    glm::glm
 )
 
 target_compile_definitions(TestApp PUBLIC VK_NO_PROTOTYPES)

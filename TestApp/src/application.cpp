@@ -3,16 +3,15 @@
 
 #include <iostream>
 
-
 bool Application::initialize()
 {
 	if (SDL_InitSubSystem(SDL_INIT_VIDEO))
 	{
 		window = SDL_CreateWindow("Vulkan 3D Renderer",
-			width,
-			height,
-			SDL_WINDOW_VULKAN |
-			SDL_WINDOW_RESIZABLE);
+								  width,
+								  height,
+								  SDL_WINDOW_VULKAN |
+									  SDL_WINDOW_RESIZABLE);
 
 		if (!window)
 		{
@@ -39,7 +38,7 @@ void Application::run()
 	running = true;
 	while (running)
 	{
-		SDL_Event event{ 0 };
+		SDL_Event event{0};
 		while (SDL_PollEvent(&event))
 		{
 			if (event.type == SDL_EVENT_QUIT)
@@ -73,8 +72,7 @@ void Application::render()
 	const uint64_t signalValue = nextSignalValue++;
 	const uint64_t waitValue = signalValue - MaxFramesInFlight;
 
-	VkSemaphoreWaitInfo waitInfo
-	{
+	VkSemaphoreWaitInfo waitInfo{
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
 		.semaphoreCount = 1,
 		.pSemaphores = &timelineSemaphore,
@@ -82,7 +80,7 @@ void Application::render()
 	};
 	vkWaitSemaphores(device, &waitInfo, UINT64_MAX);
 
-	FrameResources& res = frameResources[frameResIndex];
+	FrameResources &res = frameResources[frameResIndex];
 	vkResetCommandPool(device, res.commandPool, 0);
 
 	VkSemaphore imageAcquiredSemaphore = res.imageAcquiredSemaphore;
@@ -94,93 +92,79 @@ void Application::render()
 	{
 		requireSwapchainRecreate = true;
 		return;
-
 	}
 	else if (acquireResult == VK_SUBOPTIMAL_KHR)
 	{
 		requireSwapchainRecreate = true;
 	}
 
-	VkCommandBufferBeginInfo cmdBeginInfo
-	{
+	VkCommandBufferBeginInfo cmdBeginInfo{
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 	};
 	vkBeginCommandBuffer(res.commandBuffer, &cmdBeginInfo);
 
-	std::vector<VkImageMemoryBarrier2> layoutBarriers
-	{
-		{
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-			.srcAccessMask = 0,
-			.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-			.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-			.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-			.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.image = swapchainImages[imageIndex],
-			.subresourceRange
-			{
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1,
-			}
-		},
-		{
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-			.srcAccessMask = 0,
-			.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-			.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-			.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-			.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-			.image = depthImage,
-			.subresourceRange
-			{
-				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1,
-			}
-		}
-	};
-	VkDependencyInfo depInfo
-	{
+	std::vector<VkImageMemoryBarrier2> layoutBarriers{
+		{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		 .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		 .srcAccessMask = 0,
+		 .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		 .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		 .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		 .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		 .image = swapchainImages[imageIndex],
+		 .subresourceRange{
+			 .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			 .baseMipLevel = 0,
+			 .levelCount = 1,
+			 .baseArrayLayer = 0,
+			 .layerCount = 1,
+		 }},
+		{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		 .srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+		 .srcAccessMask = 0,
+		 .dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+		 .dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		 .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		 .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+		 .image = depthImage,
+		 .subresourceRange{
+			 .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+			 .baseMipLevel = 0,
+			 .levelCount = 1,
+			 .baseArrayLayer = 0,
+			 .layerCount = 1,
+		 }}};
+	VkDependencyInfo depInfo{
 		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
 		.imageMemoryBarrierCount = static_cast<uint32_t>(layoutBarriers.size()),
 		.pImageMemoryBarriers = layoutBarriers.data(),
 	};
 	vkCmdPipelineBarrier2(res.commandBuffer, &depInfo);
 
-	VkRenderingAttachmentInfo colorAttachmentInfo
-	{
+	VkRenderingAttachmentInfo colorAttachmentInfo{
 		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 		.imageView = swapchainImageViews[imageIndex],
 		.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.clearValue{.color{ 0.01f, 0.01f, 0.01f, 1.0f } },
+		.clearValue{.color{0.01f, 0.01f, 0.01f, 1.0f}},
 	};
-	VkRenderingAttachmentInfo depthAttachmentInfo
-	{
+	VkRenderingAttachmentInfo depthAttachmentInfo{
 		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 		.imageView = depthImageView,
 		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.clearValue{.depthStencil{ 1.0f, 0 } },
+		.clearValue{.depthStencil{1.0f, 0}},
 	};
-	VkRenderingInfo renderingInfo
-	{
+	VkRenderingInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
 		.renderArea =
-		{
-			.offset = { .x = 0, .y = 0 },
-			.extent = { .width = swapchainWidth, .height = swapchainHeight },
-		},
+			{
+				.offset = {.x = 0, .y = 0},
+				.extent = {.width = swapchainWidth, .height = swapchainHeight},
+			},
 		.layerCount = 1,
 		.colorAttachmentCount = 1,
 		.pColorAttachments = &colorAttachmentInfo,
@@ -190,30 +174,28 @@ void Application::render()
 	vkCmdBeginRendering(res.commandBuffer, &renderingInfo);
 
 	{
-		VkViewport viewport
-		{
-			.x = 0, .y = 0,
+		VkViewport viewport{
+			.x = 0,
+			.y = 0,
 			.width = static_cast<float>(swapchainWidth),
 			.height = static_cast<float>(swapchainHeight),
 		};
 		vkCmdSetViewport(res.commandBuffer, 0, 1, &viewport);
 
-		VkRect2D scissor
-		{
-			.offset = {.x = 0, .y = 0 },
-			.extent = {.width = swapchainWidth, .height = swapchainHeight },
+		VkRect2D scissor{
+			.offset = {.x = 0, .y = 0},
+			.extent = {.width = swapchainWidth, .height = swapchainHeight},
 		};
 		vkCmdSetScissor(res.commandBuffer, 0, 1, &scissor);
 
-		//draw our triangle
+		// draw our triangle
 		vkCmdBindPipeline(res.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 		vkCmdDraw(res.commandBuffer, 3, 1, 0, 0);
 	}
 
 	vkCmdEndRendering(res.commandBuffer);
 
-	VkImageMemoryBarrier2 presentLayoutBarrier
-	{
+	VkImageMemoryBarrier2 presentLayoutBarrier{
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 		.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 		.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
@@ -222,17 +204,14 @@ void Application::render()
 		.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 		.image = swapchainImages[imageIndex],
-		.subresourceRange
-		{
+		.subresourceRange{
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.baseMipLevel = 0,
 			.levelCount = 1,
 			.baseArrayLayer = 0,
 			.layerCount = 1,
-		}
-	};
-	VkDependencyInfo presentDepInfo
-	{
+		}};
+	VkDependencyInfo presentDepInfo{
 		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
 		.imageMemoryBarrierCount = 1,
 		.pImageMemoryBarriers = &presentLayoutBarrier,
@@ -241,33 +220,24 @@ void Application::render()
 
 	vkEndCommandBuffer(res.commandBuffer);
 
-	VkSemaphoreSubmitInfo imageAcquiredWaitInfo
-	{
+	VkSemaphoreSubmitInfo imageAcquiredWaitInfo{
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 		.semaphore = imageAcquiredSemaphore,
 		.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 	};
-	std::vector<VkSemaphoreSubmitInfo> semaphoreSignals
-	{
-		{
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-			.semaphore = renderCompleteSemaphores[imageIndex],
-			.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
-		},
-		{
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-			.semaphore = timelineSemaphore,
-			.value = signalValue,
-			.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
-		}
-	};
-	VkCommandBufferSubmitInfo cmdSubmitInfo
-	{
+	std::vector<VkSemaphoreSubmitInfo> semaphoreSignals{
+		{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+		 .semaphore = renderCompleteSemaphores[imageIndex],
+		 .stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT},
+		{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+		 .semaphore = timelineSemaphore,
+		 .value = signalValue,
+		 .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT}};
+	VkCommandBufferSubmitInfo cmdSubmitInfo{
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
 		.commandBuffer = res.commandBuffer,
 	};
-	VkSubmitInfo2 submitInfo
-	{
+	VkSubmitInfo2 submitInfo{
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
 		.waitSemaphoreInfoCount = 1,
 		.pWaitSemaphoreInfos = &imageAcquiredWaitInfo,
@@ -278,8 +248,7 @@ void Application::render()
 	};
 	vkQueueSubmit2(gfxQueue, 1, &submitInfo, VK_NULL_HANDLE);
 
-	VkPresentInfoKHR presentInfo
-	{
+	VkPresentInfoKHR presentInfo{
 		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 		.waitSemaphoreCount = 1,
 		.pWaitSemaphores = &renderCompleteSemaphores[imageIndex],
@@ -301,7 +270,7 @@ void Application::shutdown()
 		vkDestroySemaphore(device, timelineSemaphore, nullptr);
 		timelineSemaphore = nullptr;
 	}
-	for (auto& res : frameResources)
+	for (auto &res : frameResources)
 	{
 		vkDestroySemaphore(device, res.imageAcquiredSemaphore, nullptr);
 		vkDestroyCommandPool(device, res.commandPool, nullptr);
@@ -396,7 +365,7 @@ bool Application::initializeVulkan()
 		return false;
 	}
 
-	if(!initializeVMA())
+	if (!initializeVMA())
 	{
 		std::cerr << "Error initializing Vulkan Memory Allocator" << std::endl;
 		return false;
@@ -443,36 +412,33 @@ bool Application::createVulkanInstance()
 		return false;
 	}
 
-	VkApplicationInfo appInfo
-	{
+	VkApplicationInfo appInfo{
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
 		.pApplicationName = "Vulkan 3D Renderer",
 		.apiVersion = VulkanVersion,
 	};
 
 	uint32_t instExtensionCount = 0;
-	const char* const* extensions = SDL_Vulkan_GetInstanceExtensions(&instExtensionCount);
-	std::vector<const char*> requestedExtensions{ VK_EXT_DEBUG_UTILS_EXTENSION_NAME };
+	const char *const *extensions = SDL_Vulkan_GetInstanceExtensions(&instExtensionCount);
+	std::vector<const char *> requestedExtensions{VK_EXT_DEBUG_UTILS_EXTENSION_NAME};
 	for (int i = 0; i < instExtensionCount; ++i)
 	{
 		requestedExtensions.push_back(extensions[i]);
 	}
 
-	std::vector<const char*> requestedLayers{ "VK_LAYER_KHRONOS_validation" };
+	std::vector<const char *> requestedLayers{"VK_LAYER_KHRONOS_validation"};
 
-	VkDebugUtilsMessengerCreateInfoEXT debugInfo
-	{
+	VkDebugUtilsMessengerCreateInfoEXT debugInfo{
 		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
 		.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+						   VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+						   VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
 		.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+					   VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
 		.pfnUserCallback = debugCallback,
 	};
 
-	VkInstanceCreateInfo instCreateInfo
-	{
+	VkInstanceCreateInfo instCreateInfo{
 		.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
 		.pNext = &debugInfo,
 		.pApplicationInfo = &appInfo,
@@ -494,8 +460,8 @@ bool Application::createVulkanInstance()
 VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 	VkDebugUtilsMessageTypeFlagsEXT messageTypes,
-	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-	void* pUserData)
+	const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+	void *pUserData)
 {
 	if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 	{
@@ -521,17 +487,21 @@ VkPhysicalDevice Application::findPhysicalDevice()
 	std::vector<VkPhysicalDevice> physicalDevices(physDeviceCount);
 	vkEnumeratePhysicalDevices(vulkanInstance, &physDeviceCount, physicalDevices.data());
 
+	std::cout << "Found " << physDeviceCount << " physical devices:" << std::endl;
+
 	VkPhysicalDevice physicalDevice = nullptr;
 	if (physDeviceCount)
 	{
 		physicalDevice = physicalDevices[0];
-		for (auto& physicalDevice : physicalDevices)
+		for (auto &physicalDevice : physicalDevices)
 		{
 			VkPhysicalDeviceProperties props{};
 			vkGetPhysicalDeviceProperties(physicalDevice, &props);
+			std::cout << "- " << props.deviceName << std::endl;
 			if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 			{
 				physicalDevice = physicalDevice;
+				std::cout << "Using device: " << props.deviceName << std::endl;
 				break;
 			}
 		}
@@ -543,7 +513,7 @@ VkPhysicalDevice Application::findPhysicalDevice()
 	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, surfaceFormats.data());
 
 	bool formatSupported = false;
-	for (const VkSurfaceFormatKHR& surfaceFormat : surfaceFormats)
+	for (const VkSurfaceFormatKHR &surfaceFormat : surfaceFormats)
 	{
 		if (surfaceFormat.format == swapchainFormat)
 		{
@@ -565,7 +535,7 @@ bool Application::findGraphicsQueue()
 	uint32_t queueFamCount = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &queueFamCount, nullptr);
 	std::vector<VkQueueFamilyProperties2> queueFamProps(queueFamCount,
-		{ .sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2 });
+														{.sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2});
 	vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &queueFamCount, queueFamProps.data());
 
 	for (int currentFamIdx = 0; currentFamIdx < queueFamProps.size(); ++currentFamIdx)
@@ -573,7 +543,7 @@ bool Application::findGraphicsQueue()
 		VkBool32 hasPresentSupport = VK_FALSE;
 		vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, currentFamIdx, surface, &hasPresentSupport);
 
-		const auto& props = queueFamProps[currentFamIdx];
+		const auto &props = queueFamProps[currentFamIdx];
 		if (props.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT && hasPresentSupport)
 		{
 			gfxQueueFamIdx = currentFamIdx;
@@ -585,14 +555,10 @@ bool Application::findGraphicsQueue()
 
 bool Application::createLogicalDevice(VkPhysicalDevice physicalDevice)
 {
-	VkPhysicalDeviceVulkan14Features supportedFeatures14
-	{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES, .pNext = nullptr };
-	VkPhysicalDeviceVulkan13Features supportedFeatures13
-	{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, .pNext = &supportedFeatures14 };
-	VkPhysicalDeviceVulkan12Features supportedFeatures12
-	{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, .pNext = &supportedFeatures13 };
-	VkPhysicalDeviceFeatures2 supportedFeatures
-	{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &supportedFeatures12 };
+	VkPhysicalDeviceVulkan14Features supportedFeatures14{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES, .pNext = nullptr};
+	VkPhysicalDeviceVulkan13Features supportedFeatures13{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, .pNext = &supportedFeatures14};
+	VkPhysicalDeviceVulkan12Features supportedFeatures12{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, .pNext = &supportedFeatures13};
+	VkPhysicalDeviceFeatures2 supportedFeatures{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &supportedFeatures12};
 	vkGetPhysicalDeviceFeatures2(physicalDevice, &supportedFeatures);
 
 	if (!supportedFeatures13.dynamicRendering || !supportedFeatures13.synchronization2 ||
@@ -602,43 +568,37 @@ bool Application::createLogicalDevice(VkPhysicalDevice physicalDevice)
 		return false;
 	}
 
-	VkPhysicalDeviceVulkan14Features features14
-	{
+	VkPhysicalDeviceVulkan14Features features14{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
 		.pNext = nullptr,
 	};
-	VkPhysicalDeviceVulkan13Features features13
-	{
+	VkPhysicalDeviceVulkan13Features features13{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
 		.pNext = &features14,
 		.synchronization2 = VK_TRUE,
 		.dynamicRendering = VK_TRUE,
 	};
-	VkPhysicalDeviceVulkan12Features features12
-	{
+	VkPhysicalDeviceVulkan12Features features12{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
 		.pNext = &features13,
 		.timelineSemaphore = VK_TRUE,
 	};
-	VkPhysicalDeviceFeatures2 features
-	{
+	VkPhysicalDeviceFeatures2 features{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
 		.pNext = &features12,
 	};
 
-	std::vector<float> queuePriorities{ 1.0f };
-	VkDeviceQueueCreateInfo gfxQueueInfo
-	{
+	std::vector<float> queuePriorities{1.0f};
+	VkDeviceQueueCreateInfo gfxQueueInfo{
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
 		.queueFamilyIndex = gfxQueueFamIdx,
 		.queueCount = 1,
 		.pQueuePriorities = queuePriorities.data(),
 	};
 
-	const std::vector<const char*> deviceExtensions{ VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	const std::vector<const char *> deviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-	VkDeviceCreateInfo deviceCreateInfo
-	{
+	VkDeviceCreateInfo deviceCreateInfo{
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 		.pNext = &features,
 		.queueCreateInfoCount = 1,
@@ -665,8 +625,7 @@ bool Application::createLogicalDevice(VkPhysicalDevice physicalDevice)
 bool Application::initializeVMA()
 {
 	VmaVulkanFunctions vmaFuncInfo{};
-	VmaAllocatorCreateInfo vmaAllocInfo
-	{
+	VmaAllocatorCreateInfo vmaAllocInfo{
 		.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
 		.physicalDevice = physicalDevice,
 		.device = device,
@@ -702,14 +661,13 @@ bool Application::createSwapchain(uint32_t width, uint32_t height)
 		requestedImageCount = std::min(requestedImageCount, surfaceCapabilities.maxImageCount);
 	}
 
-	VkSwapchainCreateInfoKHR swapchainCreateInfo
-	{
+	VkSwapchainCreateInfoKHR swapchainCreateInfo{
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		.surface = surface,
 		.minImageCount = requestedImageCount,
 		.imageFormat = swapchainFormat,
 		.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-		.imageExtent = { .width = swapchainWidth, .height = swapchainHeight },
+		.imageExtent = {.width = swapchainWidth, .height = swapchainHeight},
 		.imageArrayLayers = 1,
 		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 		.preTransform = surfaceCapabilities.currentTransform,
@@ -731,21 +689,18 @@ bool Application::createSwapchain(uint32_t width, uint32_t height)
 
 	for (size_t i = 0; i < swapchainImages.size(); ++i)
 	{
-		VkImageViewCreateInfo imgViewInfo
-		{
+		VkImageViewCreateInfo imgViewInfo{
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 			.image = swapchainImages[i],
 			.viewType = VK_IMAGE_VIEW_TYPE_2D,
 			.format = swapchainFormat,
-			.subresourceRange
-			{
+			.subresourceRange{
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.baseMipLevel = 0,
 				.levelCount = 1,
 				.baseArrayLayer = 0,
 				.layerCount = 1,
-			}
-		};
+			}};
 
 		if (vkCreateImageView(device, &imgViewInfo, nullptr, &swapchainImageViews[i]) != VK_SUCCESS)
 		{
@@ -755,9 +710,9 @@ bool Application::createSwapchain(uint32_t width, uint32_t height)
 	}
 
 	renderCompleteSemaphores.resize(swapchainImages.size());
-	for (VkSemaphore& semaphore : renderCompleteSemaphores)
+	for (VkSemaphore &semaphore : renderCompleteSemaphores)
 	{
-		VkSemaphoreCreateInfo semaphoreInfo{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+		VkSemaphoreCreateInfo semaphoreInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
 		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &semaphore) != VK_SUCCESS)
 		{
 			std::cerr << "Failed to create render-complete semaphore" << std::endl;
@@ -765,12 +720,11 @@ bool Application::createSwapchain(uint32_t width, uint32_t height)
 		}
 	}
 
-	VkImageCreateInfo depthCreateInfo
-	{
+	VkImageCreateInfo depthCreateInfo{
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.imageType = VK_IMAGE_TYPE_2D,
 		.format = depthFormat,
-		.extent{.width = swapchainWidth, .height = swapchainHeight, .depth = 1 },
+		.extent{.width = swapchainWidth, .height = swapchainHeight, .depth = 1},
 		.mipLevels = 1,
 		.arrayLayers = 1,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
@@ -779,8 +733,7 @@ bool Application::createSwapchain(uint32_t width, uint32_t height)
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
 
-	VmaAllocationCreateInfo allocInfo
-	{
+	VmaAllocationCreateInfo allocInfo{
 		.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
 		.usage = VMA_MEMORY_USAGE_AUTO,
 	};
@@ -790,19 +743,16 @@ bool Application::createSwapchain(uint32_t width, uint32_t height)
 		return false;
 	}
 
-	VkImageViewCreateInfo depthImgViewInfo
-	{
+	VkImageViewCreateInfo depthImgViewInfo{
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.image = depthImage,
 		.viewType = VK_IMAGE_VIEW_TYPE_2D,
 		.format = depthFormat,
-		.subresourceRange
-		{
+		.subresourceRange{
 			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 			.levelCount = 1,
 			.layerCount = 1,
-		}
-	};
+		}};
 	if (vkCreateImageView(device, &depthImgViewInfo, nullptr, &depthImageView) != VK_SUCCESS)
 	{
 		std::cerr << "Failed to create depth image view" << std::endl;
@@ -840,7 +790,7 @@ void Application::destroySwapchain()
 	}
 }
 
-VkShaderModule Application::createShaderModule(const std::string& fileName, shaderc_shader_kind kind) const
+VkShaderModule Application::createShaderModule(const std::string &fileName, shaderc_shader_kind kind) const
 {
 	const std::string shaderPath = RESOURCES_PATH "shaders/" + fileName;
 	const std::string src = readTextFile(shaderPath);
@@ -865,8 +815,7 @@ VkShaderModule Application::createShaderModule(const std::string& fileName, shad
 	}
 
 	const size_t shaderSize = (result.cend() - result.cbegin()) * sizeof(uint32_t);
-	VkShaderModuleCreateInfo shaderModuleCreateInfo
-	{
+	VkShaderModuleCreateInfo shaderModuleCreateInfo{
 		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
 		.codeSize = shaderSize,
 		.pCode = result.cbegin(),
@@ -896,8 +845,7 @@ bool Application::createShaders()
 
 VkPipeline Application::createGraphicsPipeline()
 {
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo
-	{
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = 0,
 		.pushConstantRangeCount = 0,
@@ -909,9 +857,8 @@ VkPipeline Application::createGraphicsPipeline()
 		return nullptr;
 	}
 
-	const char* entryPoint = "main";
-	std::vector<VkPipelineShaderStageCreateInfo> shaderStages
-	{
+	const char *entryPoint = "main";
+	std::vector<VkPipelineShaderStageCreateInfo> shaderStages{
 		{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_VERTEX_BIT,
@@ -923,22 +870,18 @@ VkPipeline Application::createGraphicsPipeline()
 			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 			.module = fragmentShader,
 			.pName = entryPoint,
-		}
-	};
+		}};
 
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo
-	{
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 	};
 
-	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo
-	{
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 	};
 
-	VkPipelineDepthStencilStateCreateInfo depthStencilInfo
-	{
+	VkPipelineDepthStencilStateCreateInfo depthStencilInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_TRUE,
@@ -946,8 +889,7 @@ VkPipeline Application::createGraphicsPipeline()
 		.stencilTestEnable = VK_FALSE,
 	};
 
-	VkPipelineViewportStateCreateInfo viewportInfo
-	{
+	VkPipelineViewportStateCreateInfo viewportInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
 		.viewportCount = 1,
 		.pViewports = nullptr,
@@ -955,8 +897,7 @@ VkPipeline Application::createGraphicsPipeline()
 		.pScissors = nullptr,
 	};
 
-	VkPipelineRasterizationStateCreateInfo rasterizationInfo
-	{
+	VkPipelineRasterizationStateCreateInfo rasterizationInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
 		.polygonMode = VK_POLYGON_MODE_FILL,
 		.cullMode = VK_CULL_MODE_BACK_BIT,
@@ -964,43 +905,37 @@ VkPipeline Application::createGraphicsPipeline()
 		.lineWidth = 1.0f,
 	};
 
-	VkPipelineMultisampleStateCreateInfo multisampleInfo
-	{
+	VkPipelineMultisampleStateCreateInfo multisampleInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 	};
 
-	VkPipelineColorBlendAttachmentState colorBlendAttachmentState
-	{
+	VkPipelineColorBlendAttachmentState colorBlendAttachmentState{
 		.blendEnable = VK_FALSE,
 		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-			VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+						  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
 	};
-	VkPipelineColorBlendStateCreateInfo colorBlendInfo
-	{
+	VkPipelineColorBlendStateCreateInfo colorBlendInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		.attachmentCount = 1,
 		.pAttachments = &colorBlendAttachmentState,
 	};
 
-	std::vector<VkDynamicState> dynamicStates{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-	VkPipelineDynamicStateCreateInfo dynamicStateInfo
-	{
+	std::vector<VkDynamicState> dynamicStates{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+	VkPipelineDynamicStateCreateInfo dynamicStateInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
 		.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
 		.pDynamicStates = dynamicStates.data(),
 	};
 
-	VkPipelineRenderingCreateInfo renderingInfo
-	{
+	VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.colorAttachmentCount = 1,
 		.pColorAttachmentFormats = &swapchainFormat,
 		.depthAttachmentFormat = depthFormat,
 	};
 
-	VkGraphicsPipelineCreateInfo pipelineCreateInfo
-	{
+	VkGraphicsPipelineCreateInfo pipelineCreateInfo{
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &renderingInfo,
 		.stageCount = static_cast<uint32_t>(shaderStages.size()),
@@ -1028,14 +963,12 @@ VkPipeline Application::createGraphicsPipeline()
 
 bool Application::createSyncResources()
 {
-	VkSemaphoreTypeCreateInfo semaphoreInfo
-	{
+	VkSemaphoreTypeCreateInfo semaphoreInfo{
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		.initialValue = MaxFramesInFlight,
 	};
-	VkSemaphoreCreateInfo semaphoreCreateInfo
-	{
+	VkSemaphoreCreateInfo semaphoreCreateInfo{
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
 		.pNext = &semaphoreInfo,
 	};
@@ -1045,9 +978,9 @@ bool Application::createSyncResources()
 		return false;
 	}
 
-	for (FrameResources& res : frameResources)
+	for (FrameResources &res : frameResources)
 	{
-		VkSemaphoreCreateInfo semaphoreInfo{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+		VkSemaphoreCreateInfo semaphoreInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
 		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &res.imageAcquiredSemaphore) != VK_SUCCESS)
 		{
 			std::cerr << "Failed to create pre-frame image-acquired semaphore" << std::endl;
@@ -1060,10 +993,9 @@ bool Application::createSyncResources()
 
 bool Application::createCommandBuffer()
 {
-	for (FrameResources& res : frameResources)
+	for (FrameResources &res : frameResources)
 	{
-		VkCommandPoolCreateInfo poolInfo
-		{
+		VkCommandPoolCreateInfo poolInfo{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.queueFamilyIndex = gfxQueueFamIdx,
 		};
@@ -1073,8 +1005,7 @@ bool Application::createCommandBuffer()
 			return false;
 		}
 
-		VkCommandBufferAllocateInfo allocInfo
-		{
+		VkCommandBufferAllocateInfo allocInfo{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 			.commandPool = res.commandPool,
 			.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,

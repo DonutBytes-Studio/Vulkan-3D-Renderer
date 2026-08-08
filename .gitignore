@@ -71,3 +71,12 @@ Testing/
 
 # custom
 .vs
+SPIRV-Tools-diffConfig.cmake
+SPIRV-Tools-linkConfig.cmake
+SPIRV-Tools-lintConfig.cmake
+SPIRV-Tools-optConfig.cmake
+SPIRV-Tools-reduceConfig.cmake
+SPIRV-Tools-toolsConfig.cmake
+SPIRV-ToolsConfig.cmake
+.vscode
+TestApp/.vscode
