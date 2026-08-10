@@ -60,6 +60,7 @@ void Application::run()
 
 void Application::render()
 {
+	// Recreate swapchain if needed
 	if (requireSwapchainRecreate)
 	{
 		vkDeviceWaitIdle(device);
@@ -68,6 +69,7 @@ void Application::render()
 		requireSwapchainRecreate = false;
 	}
 
+	// Semaphore stuff
 	const uint32_t frameResIndex = frameIndex++ % MaxFramesInFlight;
 	const uint64_t signalValue = nextSignalValue++;
 	const uint64_t waitValue = signalValue - MaxFramesInFlight;

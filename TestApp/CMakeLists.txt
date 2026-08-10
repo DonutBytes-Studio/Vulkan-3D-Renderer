@@ -26,10 +26,10 @@ else()
 endif()
 
 target_link_libraries(TestApp PRIVATE
-    Vulkan::volk
+    volk
     ${SHADERC_TARGET}
     VulkanMemoryAllocator
-    SDL3::SDL3-static
+    ${SDL3_TARGET}
     glm::glm
 )
 

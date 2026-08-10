@@ -1,12 +1,20 @@
 include(FetchContent)
 include(CheckCXXSourceCompiles)
 
-option(FORCE_STATIC "Force static linking for fetched dependencies when possible" OFF)
-
-# ============================== Vulkan / Shaderc ==============================
+# ============================== Vulkan ==============================
 option(FORCE_BUILD_SHADERC "Always build Shaderc from source, even if a system version is available" OFF)
 
-find_package(Vulkan REQUIRED COMPONENTS volk)
+find_package(Vulkan REQUIRED)
+
+# ============================== Volk ==============================
+FetchContent_Declare(
+    volk
+    GIT_REPOSITORY https://github.com/zeux/volk.git
+    GIT_TAG        1.4.350
+)
+FetchContent_MakeAvailable(volk)
+
+# ============================== Shaderc ==============================
 find_package(Vulkan QUIET COMPONENTS shaderc_combined)
 
 set(SHADERC_TARGET "")
@@ -35,7 +43,7 @@ if(Vulkan_shaderc_combined_FOUND AND NOT FORCE_BUILD_SHADERC)
 endif()
 
 if(NOT SHADERC_TARGET)
-    message(STATUS "Building shaderc from source (this can take a while)...")
+    message(STATUS "Getting shaderc from source (this can take a while)...")
 
     set(SHADERC_SKIP_TESTS ON CACHE BOOL "" FORCE)
     set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "" FORCE)
@@ -86,25 +94,40 @@ endif()
 # ============================== SDL3 ===============================
 find_package(SDL3 3.4.14 QUIET CONFIG)
 
-if(TARGET SDL3::SDL3-static)
-    set(SDL3_TARGET SDL3::SDL3-static)
-elseif(TARGET SDL3::SDL3 AND NOT FORCE_STATIC)
-    set(SDL3_TARGET SDL3::SDL3)
+set(SDL3_USABLE FALSE)
+if(SDL3_FOUND)
+    if(TARGET SDL3::SDL3-static)
+        set(SDL3_TARGET SDL3::SDL3-static)
+        set(SDL3_USABLE TRUE)
+    elseif(TARGET SDL3::SDL3)
+        set(SDL3_TARGET SDL3::SDL3)
+        set(SDL3_USABLE TRUE)
+    endif()
+
+    if(SDL3_USABLE)
+        get_target_property(_sdl3_incs ${SDL3_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
+        set(SDL3_USABLE FALSE)
+        if(_sdl3_incs)
+            foreach(dir ${_sdl3_incs})
+                if(EXISTS "${dir}/SDL3/SDL.h")
+                    set(SDL3_USABLE TRUE)
+                endif()
+            endforeach()
+        endif()
+    endif()
 endif()
 
-if(NOT SDL3_FOUND OR (FORCE_STATIC AND NOT TARGET SDL3::SDL3-static))
+if(NOT SDL3_USABLE)
+    message(STATUS "No usable SDL3 install found — building from source")
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
     set(SDL_STATIC ON CACHE BOOL "" FORCE)
-
     FetchContent_Declare(
         SDL3
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
         GIT_TAG release-3.4.14
     )
-    FetchContent_GetProperties(SDL3)
-    if(NOT SDL3_POPULATED)
-        FetchContent_MakeAvailable(SDL3)
-    endif()
+    FetchContent_MakeAvailable(SDL3)
+    set(SDL3_TARGET SDL3::SDL3-static)
 endif()
 
 # ============================== GLM ================================
