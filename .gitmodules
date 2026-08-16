@@ -1,3 +1,18 @@
+[submodule "TestApp/third_party/glm"]
+	path = TestApp/third_party/glm
+	url = https://github.com/g-truc/glm.git
+	branch = 1.0.3
+
+[submodule "TestApp/third_party/sdl"]
+	path = TestApp/third_party/sdl
+	url = https://github.com/libsdl-org/SDL.git
+	branch = release-3.4.14
+
+[submodule "TestApp/third_party/vma"]
+	path = TestApp/third_party/vma
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+	branch = v3.4.0
+
 [submodule "TestApp/third_party/volk"]
 	path = TestApp/third_party/volk
 	url = https://github.com/zeux/volk.git
