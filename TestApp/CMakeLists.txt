@@ -5,13 +5,8 @@ set(PRODUCTION_BUILD FALSE CACHE BOOL "Make this a production build" FORCE)
 
 project(TestApp)
 
-include(Dependencies.cmake)
-
 file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 add_executable(TestApp ${MY_SOURCES})
-
-set(CMAKE_CXX_STANDARD 26)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
     target_compile_options(TestApp PRIVATE /std:c++latest)
@@ -25,14 +20,15 @@ else()
     target_compile_definitions(${PROJECT_NAME} PUBLIC PRODUCTION_BUILD=0)
 endif()
 
+include(Dependencies.cmake)
+
 target_link_libraries(TestApp PRIVATE
     volk
-    ${SHADERC_TARGET}
     VulkanMemoryAllocator
-    ${SDL3_TARGET}
-    glm::glm
+    Vulkan::shaderc_combined
+    SDL3-static
+    glm
 )
 
 target_compile_definitions(TestApp PUBLIC VK_NO_PROTOTYPES)
-
 target_include_directories(TestApp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include/)
