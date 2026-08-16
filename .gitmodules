@@ -1,0 +1,4 @@
+[submodule "TestApp/third_party/volk"]
+	path = TestApp/third_party/volk
+	url = https://github.com/zeux/volk.git
+	branch = 1.4.350
