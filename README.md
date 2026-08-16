@@ -8,6 +8,8 @@ Firstly
 git clone --recurse-submodules -j8 https://github.com/DonutBytes-Studio/Vulkan-3D-Renderer.git
 ```
 
+Then build with Cmake.
+
 ### Windows
 
 Download and setup the Vulkan SDK, make sure to download the Shader Toolchain with it.
