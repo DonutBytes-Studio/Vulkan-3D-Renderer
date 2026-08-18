@@ -28,6 +28,7 @@ target_link_libraries(TestApp PRIVATE
     Vulkan::shaderc_combined
     SDL3-static
     glm
+    tiny_gltf
 )
 
 target_compile_definitions(TestApp PUBLIC VK_NO_PROTOTYPES)
