@@ -7,11 +7,7 @@ bool Application::initialize()
 {
 	if (SDL_InitSubSystem(SDL_INIT_VIDEO))
 	{
-		window = SDL_CreateWindow("Vulkan 3D Renderer",
-								  width,
-								  height,
-								  SDL_WINDOW_VULKAN |
-									  SDL_WINDOW_RESIZABLE);
+		window = SDL_CreateWindow("Vulkan 3D Renderer", width, height,  SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
 		if (!window)
 		{
@@ -31,6 +27,438 @@ bool Application::initialize()
 	}
 
 	return true;
+}
+
+bool Application::load_data()
+{
+	// preallocate memory for vertex and index data
+	constexpr size_t vertexBufferBytes = 64 * 1024 * 1024; // 64MB vertex budget
+	constexpr size_t indexBufferBytes = 32 * 1024 * 1024; // 32MB index budget
+	constexpr size_t totalVerts = vertexBufferBytes / sizeof(Vertex);
+	constexpr size_t totalIndices = indexBufferBytes / sizeof(uint32_t);
+	vertices.resize(totalVerts);
+	indices.resize(totalIndices);
+
+	// default white-pixel texture
+	uint32_t whitePixelData = 0xFFFFFFFF;
+	Image whitePixel
+	{
+		.width = 1,
+		.height = 1,
+		.channels = 4,
+		.data = reinterpret_cast<unsigned char*>(&whitePixelData),
+	};
+
+	VkCommandBuffer whiteImageCmdBuffer = startTransientCommandBuffer();
+	auto [whiteImageId, whiteStagingBuffer] = createImage(
+		whiteImageCmdBuffer, whitePixel.data, whitePixel.width, whitePixel.height, 4);
+	whitePixelImageId = whiteImageId;
+	submitTransientCommandBuffer(whiteImageCmdBuffer);
+	vmaDestroyBuffer(vmaAllocator, whiteStagingBuffer.vkBuffer, whiteStagingBuffer.allocation);
+
+	VkSamplerCreateInfo samplerInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.magFilter = VK_FILTER_NEAREST,
+		.minFilter = VK_FILTER_NEAREST,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.compareEnable = VK_FALSE,
+	};
+	VkSampler sampler = nullptr;
+	if (vkCreateSampler(device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
+	{
+		std::cerr << "Error creating sampler" << std::endl;
+		return false;
+	}
+
+	samplers.push_back(sampler);
+	uint32_t whiteSamplerId = samplers.size();
+
+	textures.push_back(Texture{
+		.imageId = whitePixelImageId,
+		.samplerId = whiteSamplerId,
+		});
+
+	loadGltf(RESOURCES_PATH "models/sea_keep_lonely_watcher/scene.gltf");
+}
+
+void Application::loadGltf(const std::string& filepath)
+{
+	if (!std::filesystem::exists(filepath))
+	{
+		std::cerr << "File doesn't exist: " << filepath << std::endl;
+		return;
+	}
+
+	std::cout << " ** Loading GLTF: " << filepath << std::endl;
+
+	tg3_model model;
+	tg3_parse_options opts;
+	tg3_error_stack errors;
+
+	tg3_parse_options_init(&opts);
+	tg3_error_stack_init(&errors);
+	tg3_error_code parseResult = tg3_parse_file(&model, &errors, filepath.c_str(), filepath.size(), &opts);
+
+	if (parseResult != TG3_OK)
+	{
+		std::cerr << "Error parsing glTF file, errors found : \n";
+		for (int i = 0; i < errors.count; i++) 
+		{
+			std::cerr << errors.entries[i].message << "\n";
+		}
+		std::cerr << std::endl;
+		tg3_error_stack_free(&errors);
+		return;
+	}
+	tg3_error_stack_free(&errors);
+
+	std::filesystem::path imageDir = std::filesystem::path(filepath).parent_path();
+	std::vector<Image> images = loadImages(model, imageDir);
+	std::vector<uint32_t> imageIds = uploadImages(images);
+
+	for (const Image& image : images)
+	{
+		stbi_image_free(image.data);
+	}
+
+	std::vector<uint32_t> samplerIds = loadSamplers(model);
+	std::vector<uint32_t> textureIds = loadTextures(model, imageIds, samplerIds);
+	std::vector<uint32_t> materialIds = loadMaterials(model, textureIds);
+	std::vector<uint32_t> meshIds = loadMeshes(model, materialIds);
+}
+
+std::vector<uint32_t> Application::loadSamplers(const tg3_model& model)
+{
+	std::vector<uint32_t> samplerIds(model.samplers_count);
+	for (int i = 0; i < model.samplers_count; i++)
+	{
+		const tg3_sampler& tg3Sampler = model.samplers[i];
+		static const std::unordered_map<uint32_t, std::tuple<VkFilter, VkSamplerMipmapMode, float>> filterMap
+		{
+			{ TG3_TEXTURE_FILTER_NEAREST,
+				{ VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, 0.25f } },
+			{ TG3_TEXTURE_FILTER_LINEAR,
+				{ VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST, 0.25f } },
+			{ TG3_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR,
+				{ VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, VK_LOD_CLAMP_NONE } },
+			{ TG3_TEXTURE_FILTER_NEAREST_MIPMAP_NEAREST,
+				{ VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, VK_LOD_CLAMP_NONE } },
+			{ TG3_TEXTURE_FILTER_NEAREST_MIPMAP_LINEAR,
+				{ VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_LINEAR, VK_LOD_CLAMP_NONE } },
+			{ TG3_TEXTURE_FILTER_LINEAR_MIPMAP_NEAREST,
+				{ VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST, VK_LOD_CLAMP_NONE } },
+		};
+		static const std::unordered_map<uint32_t, VkSamplerAddressMode> wrapMap
+		{
+			{ TG3_TEXTURE_WRAP_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT },
+			{ TG3_TEXTURE_WRAP_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE },
+			{ TG3_TEXTURE_WRAP_MIRRORED_REPEAT, VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT }
+		};
+
+		VkSamplerCreateInfo samplerInfo
+		{
+			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+			.magFilter = (tg3Sampler.mag_filter == -1) ? VK_FILTER_LINEAR : std::get<0>(filterMap.at(tg3Sampler.mag_filter)),
+			.minFilter = (tg3Sampler.min_filter == -1) ? VK_FILTER_LINEAR : std::get<0>(filterMap.at(tg3Sampler.min_filter)),
+			.mipmapMode = (tg3Sampler.min_filter == -1) ? VK_SAMPLER_MIPMAP_MODE_LINEAR : std::get<1>(filterMap.at(tg3Sampler.min_filter)),
+			.addressModeU = (tg3Sampler.wrap_s == -1) ? VK_SAMPLER_ADDRESS_MODE_REPEAT : wrapMap.at(tg3Sampler.wrap_s),
+			.addressModeV = (tg3Sampler.wrap_t == -1) ? VK_SAMPLER_ADDRESS_MODE_REPEAT : wrapMap.at(tg3Sampler.wrap_t),
+			.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+			.compareEnable = VK_FALSE,
+			.minLod = 0.0f,
+			.maxLod = (tg3Sampler.min_filter == -1) ? VK_LOD_CLAMP_NONE : std::get<2>(filterMap.at(tg3Sampler.min_filter))
+		};
+
+		VkSampler sampler = nullptr;
+		if (vkCreateSampler(device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
+		{
+			std::cerr << "Unable to create texture sampler" << std::endl;
+			samplerIds[i] = textures[0].samplerId;
+		}
+		else
+		{
+			samplers.push_back(sampler);
+			samplerIds[i] = samplers.size();
+		}
+	}
+	return samplerIds;
+}
+std::vector<uint32_t> Application::loadTextures(const tg3_model& model, std::vector<uint32_t>& imageIds, std::vector<uint32_t>& samplerIds)
+{
+
+}
+std::vector<uint32_t> Application::loadMaterials(const tg3_model& model, std::vector<uint32_t>& textureIds)
+{
+
+}
+std::vector<uint32_t> Application::loadMeshes(const tg3_model& model, std::vector<uint32_t>& materialIds)
+{
+
+}
+
+std::vector<uint32_t> Application::uploadImages(std::vector<Image> images)
+{
+	VkCommandBuffer commandBuffer = startTransientCommandBuffer();
+	std::vector<GPUBuffer> stagingBuffers;
+	stagingBuffers.reserve(images.size());
+
+	std::vector<uint32_t> imageIds(images.size());
+	for (int i = 0; i < images.size(); i++)
+	{
+		const Image& image = images[i];
+		if (image.data)
+		{
+			auto [imageId, stagingTexBuffer] = createImage(commandBuffer, image.data, image.width, image.height, 4);
+			imageIds[i] = imageId;
+			stagingBuffers.push_back(stagingTexBuffer);
+		}
+		else
+		{
+			imageIds[i] = whitePixelImageId;
+		}
+	}
+
+	submitTransientCommandBuffer(commandBuffer);
+
+	for (GPUBuffer& stageBuff : stagingBuffers)
+	{
+		vmaDestroyBuffer(vmaAllocator, stageBuff.vkBuffer, stageBuff.allocation);
+	}
+	return imageIds;
+}
+
+std::vector<Image> Application::loadImages(const tg3_model &model, const std::filesystem::path &imageDir)
+{
+	std::vector<Image> images(model.images_count);
+	for (int i = 0; i < model.images_count; i++)
+	{
+		Image& img = images[i];
+		std::filesystem::path imagePath = imageDir / model.images[i].uri.data;
+		std::cout << "Loading image " << i + 1 << "/" << model.images_count << " : " << model.images[i].uri.data << std::endl;
+		img.data = stbi_load(imagePath.string().c_str(), &img.width, &img.height, &img.channels, 4);
+
+		if (!img.data)
+		{
+			std::cerr << "Failed to load image : " << imagePath.string() << std::endl;
+		}
+	}
+
+	return images;
+}
+
+VkCommandBuffer Application::startTransientCommandBuffer()
+{
+	VkCommandBufferAllocateInfo cmdAllocInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.commandPool = commandPool,
+		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		.commandBufferCount = 1,
+	};
+
+	VkCommandBuffer commandBuffer = nullptr;
+	if (vkAllocateCommandBuffers(device, &cmdAllocInfo, &commandBuffer) != VK_SUCCESS)
+	{
+		std::cerr << "Error allocating command buffer" << std::endl;
+		return nullptr;
+	}
+
+	VkCommandBufferBeginInfo cmdBeginInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+	};
+	if (vkBeginCommandBuffer(commandBuffer, &cmdBeginInfo) != VK_SUCCESS)
+	{
+		std::cerr << "Error beginning command buffer" << std::endl;
+		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+		return nullptr;
+	}
+
+	return commandBuffer;
+}
+
+void Application::submitTransientCommandBuffer(VkCommandBuffer commandBuffer)
+{
+	vkEndCommandBuffer(commandBuffer);
+
+	VkSubmitInfo submitInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.commandBufferCount = 1,
+		.pCommandBuffers = &commandBuffer,
+	};
+
+	vkQueueSubmit(gfxQueue, 1, &submitInfo, nullptr);
+	vkQueueWaitIdle(gfxQueue);
+	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+}
+
+std::pair<uint32_t, GPUBuffer> Application::createImage(VkCommandBuffer commandBuffer, unsigned char* imageData, uint32_t width, uint32_t height, int channels)
+{
+	VkFormat imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
+	VkImageCreateInfo imageInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = imageFormat,
+		.extent = {.width = width, .height = height, .depth = 1 },
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	};
+	VmaAllocationCreateInfo allocInfo{ .usage = VMA_MEMORY_USAGE_AUTO };
+	GPUImage gpuImage;
+	if (vmaCreateImage(vmaAllocator, &imageInfo, &allocInfo, &gpuImage.image, &gpuImage.allocation, nullptr) != VK_SUCCESS)
+	{
+		std::cerr << "Error creating GPU image" << std::endl;
+		return { 0, GPUBuffer{} };
+	}
+
+	VkImageViewCreateInfo imgViewInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.image = gpuImage.image,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.format = imageFormat,
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.levelCount = 1,
+			.layerCount = 1,
+		}
+	};
+	if (vkCreateImageView(device, &imgViewInfo, nullptr, &gpuImage.imageView) != VK_SUCCESS)
+	{
+		std::cerr << "Error creating image view" << std::endl;
+		return { 0, GPUBuffer{} };
+	}
+
+	VkImageMemoryBarrier2 transferBarrier
+	{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+		.srcAccessMask = VK_ACCESS_2_NONE,
+		.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+		.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		.image = gpuImage.image,
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = 1,
+			.baseArrayLayer = 0,
+			.layerCount = 1,
+		}
+	};
+	VkDependencyInfo transferDepInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.imageMemoryBarrierCount = 1,
+		.pImageMemoryBarriers = &transferBarrier
+	};
+	vkCmdPipelineBarrier2(commandBuffer, &transferDepInfo);
+
+	const size_t byteSize = width * height * channels;
+	GPUBuffer stageBuff = createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, byteSize, true, VMA_MEMORY_USAGE_AUTO_PREFER_HOST);
+	mapCopyBufferData(stageBuff, 0, imageData, byteSize);
+
+	VkBufferImageCopy buffImgCopy
+	{
+		.imageSubresource = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.mipLevel = 0,
+			.baseArrayLayer = 0,
+			.layerCount = 1,
+		},
+		.imageExtent = {
+			.width = width,
+			.height = height,
+			.depth = 1,
+		}
+	};
+	vkCmdCopyBufferToImage(commandBuffer, stageBuff.vkBuffer, gpuImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffImgCopy);
+
+	VkImageMemoryBarrier2 shaderReadBarrier
+	{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+		.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+		.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		.image = gpuImage.image,
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = 1,
+			.baseArrayLayer = 0,
+			.layerCount = 1,
+		}
+	};
+	VkDependencyInfo shaderReadDepInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.imageMemoryBarrierCount = 1,
+		.pImageMemoryBarriers = &shaderReadBarrier
+	};
+	vkCmdPipelineBarrier2(commandBuffer, &shaderReadDepInfo);
+
+	images.push_back(gpuImage);
+	const uint32_t imageId = images.size();
+	return { imageId, stageBuff };
+}
+
+GPUBuffer Application::createBuffer(VkBufferUsageFlags usage, size_t byteSize, bool mappable, VmaMemoryUsage memoryUsage)
+{
+	VkBufferCreateInfo buffInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = byteSize,
+		.usage = usage,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
+	};
+	VmaAllocationCreateInfo allocInfo
+	{
+		.flags = mappable ? VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT : 0u,
+		.usage = memoryUsage,
+	};
+	GPUBuffer gpuBuff;
+	if (vmaCreateBuffer(vmaAllocator, &buffInfo, &allocInfo, &gpuBuff.vkBuffer, &gpuBuff.allocation, nullptr) != VK_SUCCESS)
+	{
+		return GPUBuffer{};
+	}
+
+	if (usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
+	{
+		VkBufferDeviceAddressInfo vertBdaInfo
+		{
+			.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+			.buffer = gpuBuff.vkBuffer,
+		};
+		gpuBuff.deviceAddress = vkGetBufferDeviceAddress(device, &vertBdaInfo);
+	}
+
+	return gpuBuff;
+}
+
+void Application::mapCopyBufferData(const GPUBuffer& buffer, size_t bufferOffset, void* data, size_t byteSize)
+{
+	void* buffPtr = nullptr;
+	if (vmaMapMemory(vmaAllocator, buffer.allocation, &buffPtr) != VK_SUCCESS)
+	{
+		std::cerr << "Error mapping buffer memory" << std::endl;
+		return;
+	}
+	std::memcpy(static_cast<char*>(buffPtr) + bufferOffset, data, byteSize);
+	vmaUnmapMemory(vmaAllocator, buffer.allocation);
 }
 
 void Application::run()
@@ -272,11 +700,14 @@ void Application::shutdown()
 		vkDestroySemaphore(device, timelineSemaphore, nullptr);
 		timelineSemaphore = nullptr;
 	}
+
 	for (auto &res : frameResources)
 	{
 		vkDestroySemaphore(device, res.imageAcquiredSemaphore, nullptr);
 		vkDestroyCommandPool(device, res.commandPool, nullptr);
 	}
+
+	vkDestroyCommandPool(device, commandPool, nullptr);
 
 	if (pipelineLayout)
 	{
@@ -995,9 +1426,22 @@ bool Application::createSyncResources()
 
 bool Application::createCommandBuffer()
 {
+	VkCommandPoolCreateInfo poolInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+		.queueFamilyIndex = gfxQueueFamIdx,
+	};
+	if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS)
+	{
+		std::cerr << "Failed to create command buffer pool" << std::endl;
+		return false;
+	}
+
 	for (FrameResources &res : frameResources)
 	{
-		VkCommandPoolCreateInfo poolInfo{
+		VkCommandPoolCreateInfo poolInfo
+		{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.queueFamilyIndex = gfxQueueFamIdx,
 		};
